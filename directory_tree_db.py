@@ -1,24 +1,32 @@
 import sqlite3
+import os
 from typing import Optional, List, Tuple
 from directory_tree_model import DirectoryModel
+
 
 
 class DirectoryTreeDB:
 
     def __init__(self) -> None:
-        self.connector = sqlite3.connect("directory_tree.db")
+        db_name: str = "directory_tree.db"
+        if "PYTEST_DIRECTORY_TREE" in os.environ:
+            db_name = "test_directory_tree.db"
+        self.connector = sqlite3.connect(db_name)
         self.cursor = self.connector.cursor()
         self.create_table()
 
     def create_table(self) -> None:
-
+        # TODO: Investigate why the unique constrain is not working in certain cases(with parent null). Will avoid a query to db.
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS DIRECTORY(id INTEGER PRIMARY KEY, folder_name TEXT, parent INTEGER NULL, UNIQUE (folder_name, parent)) """)
         self.cursor.execute("""CREATE INDEX IF NOT EXISTS index_folder_name ON DIRECTORY(folder_name)""")
 
     def create_directory(self, folder_name: str, parent: Optional[int]) -> None:
         try:
-            self.cursor.execute("""INSERT INTO DIRECTORY(folder_name, parent) VALUES(?, ?)""", (folder_name, parent))
-            self.connector.commit()
+            if not self.get_directory(folder_name, parent):
+                self.cursor.execute("""INSERT INTO DIRECTORY(folder_name, parent) VALUES(?, ?)""", (folder_name, parent))
+                self.connector.commit()
+            else:
+                raise AssertionError('Folder already exists')
         except sqlite3.IntegrityError as integrity_error:
             print("Error creating directory: ", integrity_error)
 
@@ -39,8 +47,7 @@ class DirectoryTreeDB:
         try:
             directory: Optional[DirectoryModel] = self.get_directory(folder_name, parent)
             assert directory, "Directory does not exist"
-            self.cursor.execute("""DELETE FROM DIRECTORY WHERE id=?""", (directory.id,))
-            self.connector.commit()
+            self.direct_delete_directory(directory.id)
             return directory
         except sqlite3.IntegrityError as integrity_error:
             print("Error deleting directory: ", integrity_error)

@@ -33,9 +33,16 @@ class DirectoryTree:
         return folder_name, parent_reference
 
     def create_directory(self, directory: str) -> None:
-        folder_name, parent_reference = self.__find_directory__(directory)
-        self.database.create_directory(folder_name=folder_name, parent=parent_reference)
         print(f"{CREATE} {directory}")
+        try:
+            folder_name, parent_reference = self.__find_directory__(directory)
+        except AssertionError as e:
+            print(f"{e} does not exist")
+            return
+        try:
+            self.database.create_directory(folder_name=folder_name, parent=parent_reference)
+        except AssertionError:
+            print(f"Directory {directory} already exists")
 
     def list_directories(self) -> None:
         print(f"{LIST}")
@@ -86,11 +93,15 @@ class DirectoryTree:
         delete_children(directory_model)
 
     def move_directory(self, from_directory: str, to_directory: str) -> None:
-        from_folder_name, from_parent_reference = self.__find_directory__(from_directory)
-        to_folder_name, to_parent_reference = self.__find_directory__(to_directory)
-        to_directory = self.database.get_directory(to_folder_name, to_parent_reference)
-        self.database.update_directory_parent(from_folder_name, from_parent_reference, to_directory.id)
         print(f"{MOVE} {from_directory} {to_directory}")
+        try:
+            from_folder_name, from_parent_reference = self.__find_directory__(from_directory)
+            to_folder_name, to_parent_reference = self.__find_directory__(to_directory)
+            to_directory_model = self.database.get_directory(to_folder_name, to_parent_reference)
+            assert to_directory_model, f"{to_directory}"
+            self.database.update_directory_parent(from_folder_name, from_parent_reference, to_directory_model.id)
+        except AssertionError as e:
+            print(f'Cannot move {from_directory} - {e} does not exist')
 
     def close(self) -> None:
         self.database.close_db()
